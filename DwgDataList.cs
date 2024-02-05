@@ -30,596 +30,596 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
    {
       public static TypedValue[] ToArray(this DBObject obj)
       {
-			if(obj == null)
-				throw new ArgumentNullException(nameof(obj));
-			using(DwgDataList list = new DwgDataList())
-			{
-				obj.DwgOut(list);
-				return list.TypedValues;
-			}
+         if(obj == null)
+            throw new ArgumentNullException(nameof(obj));
+         using(DwgDataList list = new DwgDataList())
+         {
+            obj.DwgOut(list);
+            return list.TypedValues;
+         }
       }
 
-		/// <summary>
-		/// Example: Dumps the result of ToArray() to the console:
-		/// </summary>
+      /// <summary>
+      /// Example: Dumps the result of ToArray() to the console:
+      /// </summary>
 
-		public static void DwgDump(this DBObject obj)
-		{
-			var data = obj.ToArray();
-			Editor ed = Application.DocumentManager.MdiActiveDocument.Editor;
-			int i = 0;
-			foreach(TypedValue tv in data)
-			{
-				ed.WriteMessage("\n[{0}] {1}: {2}",
-					i++, (DxfCode) tv.TypeCode, tv.Value.ToString());
-			}
-		}
+      public static void DwgDump(this DBObject obj)
+      {
+         var data = obj.ToArray();
+         Editor ed = Application.DocumentManager.MdiActiveDocument.Editor;
+         int i = 0;
+         foreach(TypedValue tv in data)
+         {
+            ed.WriteMessage("\n[{0}] {1}: {2}",
+               i++, (DxfCode) tv.TypeCode, tv.Value.ToString());
+         }
+      }
    }
 
    public class DwgDataList : DwgFiler, IList<DwgDataItem>
-	{
-		ErrorStatus status = ErrorStatus.OK;
-		FilerType filerType = FilerType.CopyFiler;
-		List<DwgDataItem> data = new List<DwgDataItem>();
-		int position = 0;
-
-		public DwgDataList(FilerType filerType = FilerType.CopyFiler)
-		{
-			this.filerType = filerType;
-		}
-
-		public void Rewind()
-		{
-			position = 0;
-		}
-
-		public DwgDataItem? Peek()
-		{
-			if(data.Count > 0 && position < data.Count - 1)
-			{
-				return data[position];
-			}
-			return null;
-		}
-
-		public IList<DwgDataItem> Data
-		{
-			get
-			{
-				return data.AsReadOnly();
-			}
-		}
-
-		public override ErrorStatus FilerStatus
-		{
-			get
-			{
-				return status;
-			}
-			set
-			{
-				status = value;
-			}
-		}
-
-		public override FilerType FilerType
-		{
-			get
-			{
-				return FilerType.CopyFiler;
-			}
-		}
-
-		public override long Position
-		{
-			get
-			{
-				return position;
-			}
-		}
-
-		public int Count
-		{
-			get
-			{
-				return data.Count;
-			}
-		}
-
-		public bool IsReadOnly
-		{
-			get
-			{
-				return true;
-			}
-		}
-
-		public bool IsEndOfData
-		{
-			get
-			{
-				return position > this.data.Count - 1;
-			}
-		}
-
-		public DwgDataItem this[int index]
-		{
-			get
-			{
-				return data[CheckIndex(index)];
-			}
-
-			set
-			{
-				SetValueAt(index, value);
-			}
-		}
-
-		T TypeMismatch<T>(int index, Type type)
-		{
-			throw new InvalidCastException($"Type mismatch at {index} ({type.Name}, expecting {typeof(T).Name})");
-		}
-
-		public override IntPtr ReadAddress()
-		{
-			return Read<IntPtr>();
-		}
-
-		public override byte[] ReadBinaryChunk()
-		{
-			return Read<byte[]>();
-		}
-
-		protected virtual T Read<T>()
-		{
-			if(IsEndOfData)
-				throw new AcRx.Exception(AcRx.ErrorStatus.EndOfObject);
-			object value = data[position].Value;
-			if(value is T)
-			{
-				++position;
-				return (T) value;
-			}
-			return TypeMismatch<T>(position, value.GetType());
-		}
-
-		public override bool ReadBoolean()
-		{
-			return Read<bool>();
-		}
-
-		public override byte ReadByte()
-		{
-			return Read<Byte>();
-		}
-
-		public override void ReadBytes(byte[] value)
-		{
-			byte[] array = Read<byte[]>();
-			Array.Copy(array, value, value.Length);
-		}
-
-		public override double ReadDouble()
-		{
-			return Read<double>();
-		}
-
-		public override Handle ReadHandle()
-		{
-			return Read<Handle>();
-		}
-
-		public override ObjectId ReadHardOwnershipId()
-		{
-			return Read<ObjectId>();
-		}
-
-		public override ObjectId ReadHardPointerId()
-		{
-			return Read<ObjectId>();
-		}
-
-		public override short ReadInt16()
-		{
-			return Read<short>();
-		}
-
-		public override int ReadInt32()
-		{
-			return Read<int>();
-		}
-
-		public override long ReadInt64()
-		{
-			return Read<long>();
-		}
-
-		public override Point2d ReadPoint2d()
-		{
-			return Read<Point2d>();
-		}
-
-		public override Point3d ReadPoint3d()
-		{
-			return Read<Point3d>();
-		}
-
-		public override Scale3d ReadScale3d()
-		{
-			return Read<Scale3d>();
-		}
-
-		public override ObjectId ReadSoftOwnershipId()
-		{
-			return Read<ObjectId>();
-		}
-
-		public override ObjectId ReadSoftPointerId()
-		{
-			return Read<ObjectId>();
-		}
-
-		public override string ReadString()
-		{
-			return Read<string>();
-		}
-
-		public override ushort ReadUInt16()
-		{
-			return Read<ushort>();
-		}
-
-		public override uint ReadUInt32()
-		{
-			return Read<uint>();
-		}
-
-		public override ulong ReadUInt64()
-		{
-			return Read<ulong>();
-		}
-
-		public override Vector2d ReadVector2d()
-		{
-			return Read<Vector2d>();
-		}
-
-		public override Vector3d ReadVector3d()
-		{
-			return Read<Vector3d>();
-		}
-
-		public override void ResetFilerStatus()
-		{
-			status = ErrorStatus.OK;
-		}
-
-		public override void Seek(long offset, int method)
-		{
-			throw new NotSupportedException();  // TODO
-		}
-
-		/// <summary>
-		/// Write overrides, used by this class to generate
-		/// a list of data items.
-		/// </summary>
-		/// <param name="value"></param>
-		
-		public override void WriteAddress(IntPtr value)
-		{
-			Add(DwgDataType.Ptr, value);
-		}
-
-		public override void WriteBinaryChunk(byte[] chunk)
-		{
-			if(chunk == null)
-				throw new ArgumentNullException(nameof(chunk));
-			byte[] data = new byte[chunk.Length];
-			chunk.CopyTo(data, 0);
-			this.Add(DwgDataType.BChunk, data);
-		}
-
-		public override void WriteBoolean(bool value)
-		{
-			this.Add(DwgDataType.Bool, value);
-		}
-
-		public override void WriteByte(byte value)
-		{
-			this.Add(DwgDataType.Byte, value);
-		}
-
-		public override void WriteBytes(byte[] value)
-		{
-			this.Add(DwgDataType.ByteArray, value);
-		}
-
-		public override void WriteDouble(double value)
-		{
-			this.Add(DwgDataType.Real, value);
-		}
-
-		public override void WriteHandle(Handle handle)
-		{
-			this.Add(DwgDataType.Handle, handle);
-		}
-
-		public override void WriteHardOwnershipId(ObjectId value)
-		{
-			this.Add(DwgDataType.HardOwnershipId, value);
-		}
-
-		public override void WriteHardPointerId(ObjectId value)
-		{
-			this.Add(DwgDataType.HardPointerId, value);
-		}
-
-		public override void WriteInt16(short value)
-		{
-			this.Add(DwgDataType.Int16, value);
-		}
-
-		public override void WriteInt32(int value)
-		{
-			this.Add(DwgDataType.Int32, value);
-		}
-
-		public override void WriteInt64(long value)
-		{
-			this.Add(DwgDataType.Int64, value);
-		}
-
-		public override void WritePoint2d(Point2d value)
-		{
-			this.Add(DwgDataType.Point2d, value);
-		}
-
-		public override void WritePoint3d(Point3d value)
-		{
-			this.Add(DwgDataType.Point3d, value);
-		}
-
-		public override void WriteScale3d(Scale3d value)
-		{
-			this.Add(DwgDataType.Scale3d, value);
-		}
-
-		public override void WriteSoftOwnershipId(ObjectId value)
-		{
-			this.Add(DwgDataType.SoftOwnershipId, value);
-		}
-
-		public override void WriteSoftPointerId(ObjectId value)
-		{
-			this.Add(DwgDataType.SoftPointerId, value);
-		}
-
-		public override void WriteString(string value)
-		{
-			this.Add(DwgDataType.Text, value);
-		}
-
-		public override void WriteUInt16(ushort value)
-		{
-			this.Add(DwgDataType.UInt16, value);
-		}
-
-		public override void WriteUInt32(uint value)
-		{
-			this.Add(DwgDataType.UInt32, value);
-		}
-
-		public override void WriteUInt64(ulong value)
-		{
-			this.Add(DwgDataType.UInt64, value);
-		}
-
-		public override void WriteVector2d(Vector2d value)
-		{
-			this.Add(DwgDataType.Vector2d, value);
-		}
-
-		public override void WriteVector3d(Vector3d value)
-		{
-			this.Add(DwgDataType.Vector3d, value);
-		}
-
-		TypedValue[] typedValues = null;
-		
-		public TypedValue[] TypedValues
-		{
-			get
-			{
-				if(typedValues == null)
-				{
-					TypedValue[] values = new TypedValue[this.Count];
-					for(int i = 0; i < this.Count; i++)
-						values[i] = this[i].ToTypedValue();
-					typedValues = values;
-				}
-				return typedValues;
-			}
-		}
-
-		public List<object> Values
-		{
-			get
-			{
-				return data.ConvertAll(d => d.Value);
-			}
-		}
-
-		/// <summary>
-		/// The distinct set of DwgDataTypes contained in the instance.
-		/// </summary>
-		public IEnumerable<DwgDataType> Types
-		{
-			get
-			{
-				return data.Select(d => d.DataType).Distinct();
-			}
-		}
-
-		int CheckIndex(int index)
-		{
-			if(index < 0 || index > data.Count - 1)
-				throw new IndexOutOfRangeException($"index = {index} count = {data.Count}");
-			return index;
-		}
-
-		public object GetValueAt(int index)
-		{
-			return data[CheckIndex(index)].Value;
-		}
-
-		public DwgDataType GetTypeAt(int index)
-		{
-			return data[CheckIndex(index)].DataType;
-		}
-
-		public bool ContainsType(DwgDataType type)
-		{
-			return IndexOfType(type) > -1;
-		}
-
-		public int IndexOfType(DwgDataType type)
-		{
-			return IndexOf(d => d.DataType == type);
-		}
-
-		public int IndexOfValue(object value)
-		{
-			return IndexOf(d => object.Equals(d.Value, value));
-		}
-
-		/// <summary>
-		/// IList<DwgData> methods that modify the contents of
-		/// the instance (namely delete) should never be used
-		/// during a call to a method that triggers the use of
-		/// the filer methods above. Altering the contents of
-		/// the instance affects the Position property, which
-		/// may be corrupt if one or more elements are removed
-		/// from the instance.
-		/// 
-		/// Methods that trigger calls to the filer methods
-		/// above include DBObject.DwgIn() and DwgOut(), along
-		/// with the DwgInFields() and DwgOutFields() methods of
-		/// non-DBObjects that were designed to be persisted in
-		/// the data of a DBObject.
-		/// </summary>
-		/// <param name="item"></param>
-		/// <returns></returns>
-
-		public int IndexOf(DwgDataItem item)
-		{
-			return data.IndexOf(item);
-		}
-
-		public int IndexOf(Func<DwgDataItem, bool> predicate)
-		{
-			for(int i = 0; i < data.Count; i++)
-			{
-				if(predicate(data[i]))
-					return i;
-			}
-			return -1;
-		}
-
-		public void Insert(int index, DwgDataItem item)
-		{
-			throw new NotSupportedException("The instance is read-only");
-		}
-
-		public void RemoveAt(int index)
-		{
+   {
+      ErrorStatus status = ErrorStatus.OK;
+      FilerType filerType = FilerType.CopyFiler;
+      List<DwgDataItem> data = new List<DwgDataItem>();
+      int position = 0;
+
+      public DwgDataList(FilerType filerType = FilerType.CopyFiler)
+      {
+         this.filerType = filerType;
+      }
+
+      public void Rewind()
+      {
+         position = 0;
+      }
+
+      public DwgDataItem? Peek()
+      {
+         if(data.Count > 0 && position < data.Count - 1)
+         {
+            return data[position];
+         }
+         return null;
+      }
+
+      public IList<DwgDataItem> Data
+      {
+         get
+         {
+            return data.AsReadOnly();
+         }
+      }
+
+      public override ErrorStatus FilerStatus
+      {
+         get
+         {
+            return status;
+         }
+         set
+         {
+            status = value;
+         }
+      }
+
+      public override FilerType FilerType
+      {
+         get
+         {
+            return FilerType.CopyFiler;
+         }
+      }
+
+      public override long Position
+      {
+         get
+         {
+            return position;
+         }
+      }
+
+      public int Count
+      {
+         get
+         {
+            return data.Count;
+         }
+      }
+
+      public bool IsReadOnly
+      {
+         get
+         {
+            return true;
+         }
+      }
+
+      public bool IsEndOfData
+      {
+         get
+         {
+            return position > this.data.Count - 1;
+         }
+      }
+
+      public DwgDataItem this[int index]
+      {
+         get
+         {
+            return data[CheckIndex(index)];
+         }
+
+         set
+         {
+            SetValueAt(index, value);
+         }
+      }
+
+      T TypeMismatch<T>(int index, Type type)
+      {
+         throw new InvalidCastException($"Type mismatch at {index} ({type.Name}, expecting {typeof(T).Name})");
+      }
+
+      public override IntPtr ReadAddress()
+      {
+         return Read<IntPtr>();
+      }
+
+      public override byte[] ReadBinaryChunk()
+      {
+         return Read<byte[]>();
+      }
+
+      protected virtual T Read<T>()
+      {
+         if(IsEndOfData)
+            throw new AcRx.Exception(AcRx.ErrorStatus.EndOfObject);
+         object value = data[position].Value;
+         if(value is T)
+         {
+            ++position;
+            return (T) value;
+         }
+         return TypeMismatch<T>(position, value.GetType());
+      }
+
+      public override bool ReadBoolean()
+      {
+         return Read<bool>();
+      }
+
+      public override byte ReadByte()
+      {
+         return Read<Byte>();
+      }
+
+      public override void ReadBytes(byte[] value)
+      {
+         byte[] array = Read<byte[]>();
+         Array.Copy(array, value, value.Length);
+      }
+
+      public override double ReadDouble()
+      {
+         return Read<double>();
+      }
+
+      public override Handle ReadHandle()
+      {
+         return Read<Handle>();
+      }
+
+      public override ObjectId ReadHardOwnershipId()
+      {
+         return Read<ObjectId>();
+      }
+
+      public override ObjectId ReadHardPointerId()
+      {
+         return Read<ObjectId>();
+      }
+
+      public override short ReadInt16()
+      {
+         return Read<short>();
+      }
+
+      public override int ReadInt32()
+      {
+         return Read<int>();
+      }
+
+      public override long ReadInt64()
+      {
+         return Read<long>();
+      }
+
+      public override Point2d ReadPoint2d()
+      {
+         return Read<Point2d>();
+      }
+
+      public override Point3d ReadPoint3d()
+      {
+         return Read<Point3d>();
+      }
+
+      public override Scale3d ReadScale3d()
+      {
+         return Read<Scale3d>();
+      }
+
+      public override ObjectId ReadSoftOwnershipId()
+      {
+         return Read<ObjectId>();
+      }
+
+      public override ObjectId ReadSoftPointerId()
+      {
+         return Read<ObjectId>();
+      }
+
+      public override string ReadString()
+      {
+         return Read<string>();
+      }
+
+      public override ushort ReadUInt16()
+      {
+         return Read<ushort>();
+      }
+
+      public override uint ReadUInt32()
+      {
+         return Read<uint>();
+      }
+
+      public override ulong ReadUInt64()
+      {
+         return Read<ulong>();
+      }
+
+      public override Vector2d ReadVector2d()
+      {
+         return Read<Vector2d>();
+      }
+
+      public override Vector3d ReadVector3d()
+      {
+         return Read<Vector3d>();
+      }
+
+      public override void ResetFilerStatus()
+      {
+         status = ErrorStatus.OK;
+      }
+
+      public override void Seek(long offset, int method)
+      {
+         throw new NotSupportedException();  // TODO
+      }
+
+      /// <summary>
+      /// Write overrides, used by this class to generate
+      /// a list of data items.
+      /// </summary>
+      /// <param name="value"></param>
+      
+      public override void WriteAddress(IntPtr value)
+      {
+         Add(DwgDataType.Ptr, value);
+      }
+
+      public override void WriteBinaryChunk(byte[] chunk)
+      {
+         if(chunk == null)
+            throw new ArgumentNullException(nameof(chunk));
+         byte[] data = new byte[chunk.Length];
+         chunk.CopyTo(data, 0);
+         this.Add(DwgDataType.BChunk, data);
+      }
+
+      public override void WriteBoolean(bool value)
+      {
+         this.Add(DwgDataType.Bool, value);
+      }
+
+      public override void WriteByte(byte value)
+      {
+         this.Add(DwgDataType.Byte, value);
+      }
+
+      public override void WriteBytes(byte[] value)
+      {
+         this.Add(DwgDataType.ByteArray, value);
+      }
+
+      public override void WriteDouble(double value)
+      {
+         this.Add(DwgDataType.Real, value);
+      }
+
+      public override void WriteHandle(Handle handle)
+      {
+         this.Add(DwgDataType.Handle, handle);
+      }
+
+      public override void WriteHardOwnershipId(ObjectId value)
+      {
+         this.Add(DwgDataType.HardOwnershipId, value);
+      }
+
+      public override void WriteHardPointerId(ObjectId value)
+      {
+         this.Add(DwgDataType.HardPointerId, value);
+      }
+
+      public override void WriteInt16(short value)
+      {
+         this.Add(DwgDataType.Int16, value);
+      }
+
+      public override void WriteInt32(int value)
+      {
+         this.Add(DwgDataType.Int32, value);
+      }
+
+      public override void WriteInt64(long value)
+      {
+         this.Add(DwgDataType.Int64, value);
+      }
+
+      public override void WritePoint2d(Point2d value)
+      {
+         this.Add(DwgDataType.Point2d, value);
+      }
+
+      public override void WritePoint3d(Point3d value)
+      {
+         this.Add(DwgDataType.Point3d, value);
+      }
+
+      public override void WriteScale3d(Scale3d value)
+      {
+         this.Add(DwgDataType.Scale3d, value);
+      }
+
+      public override void WriteSoftOwnershipId(ObjectId value)
+      {
+         this.Add(DwgDataType.SoftOwnershipId, value);
+      }
+
+      public override void WriteSoftPointerId(ObjectId value)
+      {
+         this.Add(DwgDataType.SoftPointerId, value);
+      }
+
+      public override void WriteString(string value)
+      {
+         this.Add(DwgDataType.Text, value);
+      }
+
+      public override void WriteUInt16(ushort value)
+      {
+         this.Add(DwgDataType.UInt16, value);
+      }
+
+      public override void WriteUInt32(uint value)
+      {
+         this.Add(DwgDataType.UInt32, value);
+      }
+
+      public override void WriteUInt64(ulong value)
+      {
+         this.Add(DwgDataType.UInt64, value);
+      }
+
+      public override void WriteVector2d(Vector2d value)
+      {
+         this.Add(DwgDataType.Vector2d, value);
+      }
+
+      public override void WriteVector3d(Vector3d value)
+      {
+         this.Add(DwgDataType.Vector3d, value);
+      }
+
+      TypedValue[] typedValues = null;
+      
+      public TypedValue[] TypedValues
+      {
+         get
+         {
+            if(typedValues == null)
+            {
+               TypedValue[] values = new TypedValue[this.Count];
+               for(int i = 0; i < this.Count; i++)
+                  values[i] = this[i].ToTypedValue();
+               typedValues = values;
+            }
+            return typedValues;
+         }
+      }
+
+      public List<object> Values
+      {
+         get
+         {
+            return data.ConvertAll(d => d.Value);
+         }
+      }
+
+      /// <summary>
+      /// The distinct set of DwgDataTypes contained in the instance.
+      /// </summary>
+      public IEnumerable<DwgDataType> Types
+      {
+         get
+         {
+            return data.Select(d => d.DataType).Distinct();
+         }
+      }
+
+      int CheckIndex(int index)
+      {
+         if(index < 0 || index > data.Count - 1)
+            throw new IndexOutOfRangeException($"index = {index} count = {data.Count}");
+         return index;
+      }
+
+      public object GetValueAt(int index)
+      {
+         return data[CheckIndex(index)].Value;
+      }
+
+      public DwgDataType GetTypeAt(int index)
+      {
+         return data[CheckIndex(index)].DataType;
+      }
+
+      public bool ContainsType(DwgDataType type)
+      {
+         return IndexOfType(type) > -1;
+      }
+
+      public int IndexOfType(DwgDataType type)
+      {
+         return IndexOf(d => d.DataType == type);
+      }
+
+      public int IndexOfValue(object value)
+      {
+         return IndexOf(d => object.Equals(d.Value, value));
+      }
+
+      /// <summary>
+      /// IList<DwgData> methods that modify the contents of
+      /// the instance (namely delete) should never be used
+      /// during a call to a method that triggers the use of
+      /// the filer methods above. Altering the contents of
+      /// the instance affects the Position property, which
+      /// may be corrupt if one or more elements are removed
+      /// from the instance.
+      /// 
+      /// Methods that trigger calls to the filer methods
+      /// above include DBObject.DwgIn() and DwgOut(), along
+      /// with the DwgInFields() and DwgOutFields() methods of
+      /// non-DBObjects that were designed to be persisted in
+      /// the data of a DBObject.
+      /// </summary>
+      /// <param name="item"></param>
+      /// <returns></returns>
+
+      public int IndexOf(DwgDataItem item)
+      {
+         return data.IndexOf(item);
+      }
+
+      public int IndexOf(Func<DwgDataItem, bool> predicate)
+      {
+         for(int i = 0; i < data.Count; i++)
+         {
+            if(predicate(data[i]))
+               return i;
+         }
+         return -1;
+      }
+
+      public void Insert(int index, DwgDataItem item)
+      {
          throw new NotSupportedException("The instance is read-only");
-		}
+      }
 
-		public void SetValueAt(int index, object value)
-		{
+      public void RemoveAt(int index)
+      {
          throw new NotSupportedException("The instance is read-only");
-		}
+      }
 
-		public void Add(DwgDataType type, object value)
-		{
+      public void SetValueAt(int index, object value)
+      {
          throw new NotSupportedException("The instance is read-only");
-		}
+      }
 
-		public void Add(TypedValue value)
-		{
+      public void Add(DwgDataType type, object value)
+      {
          throw new NotSupportedException("The instance is read-only");
-		}
+      }
 
-		public virtual void Add(DwgDataItem item)
-		{
+      public void Add(TypedValue value)
+      {
          throw new NotSupportedException("The instance is read-only");
-		}
+      }
 
-		public void Clear()
-		{
+      public virtual void Add(DwgDataItem item)
+      {
          throw new NotSupportedException("The instance is read-only");
-		}
+      }
 
-		public bool Contains(DwgDataItem item)
-		{
-			return data.Contains(item);
-		}
-
-		public void CopyTo(DwgDataItem[] array, int arrayIndex)
-		{
-			data.CopyTo(array, arrayIndex);
-		}
-
-		public bool Remove(DwgDataItem item)
-		{
+      public void Clear()
+      {
          throw new NotSupportedException("The instance is read-only");
-		}
+      }
 
-		public IEnumerator<DwgDataItem> GetEnumerator()
-		{
-			return data.GetEnumerator();
-		}
+      public bool Contains(DwgDataItem item)
+      {
+         return data.Contains(item);
+      }
 
-		IEnumerator IEnumerable.GetEnumerator()
-		{
-			return this.GetEnumerator();
-		}
-	}
+      public void CopyTo(DwgDataItem[] array, int arrayIndex)
+      {
+         data.CopyTo(array, arrayIndex);
+      }
 
-	public enum DwgDataType
-	{
-		Null = 0,
-		Real = 1,
-		Int32 = 2,
-		Int16 = 3,
-		Int8 = 4,
-		Text = 5,
-		BChunk = 6,
-		Handle = 7,
-		HardOwnershipId = 8,
-		SoftOwnershipId = 9,
-		HardPointerId = 10,
-		SoftPointerId = 11,
-		Real3 = 12,
-		Int64 = 13,
-		NotRecognized = 19,
+      public bool Remove(DwgDataItem item)
+      {
+         throw new NotSupportedException("The instance is read-only");
+      }
 
-		/// <summary>
-		/// Application-specific, not all values are supported.
-		/// </summary>
-		Point3d = 20,
-		Point2d = 21,
-		ByteArray = 22,
-		Byte = 23,
-		Bool = 24,
-		Ptr = 25,
-		Scale3d = 26,
-		Vector3d = 27,
-		Vector2d = 28,
-		UInt16 = 29,
-		UInt32 = 30,
-		UInt64 = 31
-	};
+      public IEnumerator<DwgDataItem> GetEnumerator()
+      {
+         return data.GetEnumerator();
+      }
+
+      IEnumerator IEnumerable.GetEnumerator()
+      {
+         return this.GetEnumerator();
+      }
+   }
+
+   public enum DwgDataType
+   {
+      Null = 0,
+      Real = 1,
+      Int32 = 2,
+      Int16 = 3,
+      Int8 = 4,
+      Text = 5,
+      BChunk = 6,
+      Handle = 7,
+      HardOwnershipId = 8,
+      SoftOwnershipId = 9,
+      HardPointerId = 10,
+      SoftPointerId = 11,
+      Real3 = 12,
+      Int64 = 13,
+      NotRecognized = 19,
+
+      /// <summary>
+      /// Application-specific, not all values are supported.
+      /// </summary>
+      Point3d = 20,
+      Point2d = 21,
+      ByteArray = 22,
+      Byte = 23,
+      Bool = 24,
+      Ptr = 25,
+      Scale3d = 26,
+      Vector3d = 27,
+      Vector2d = 28,
+      UInt16 = 29,
+      UInt32 = 30,
+      UInt64 = 31
+   };
 
    public struct DwgDataItem : IEquatable<DwgDataItem>
    {
