@@ -1,4 +1,8 @@
-﻿using System;
+﻿/// DwgDataList.cs  -  Tony Tanzillo
+/// Distributed under the terms of the
+/// MIT License.
+
+using System;
 using System.Linq;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.Runtime;
@@ -11,16 +15,17 @@ using Autodesk.AutoCAD.EditorInput;
 namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
 {
    /// <summary>
-   /// Custom DwgFiler class that can be used to read DBObject
-   /// data into a ResultBuffer or array of TypedValues.
+   /// Custom DwgFiler class that can be used to read the
+   /// data that a DBObject writes to a DWG file into a 
+   /// ResultBufder or array of TypedValues.
    /// 
-   /// Use the included DBObject.ToArray() extension method to
-   /// read the DWG data of a DBObject:
+   /// Use the included DBObject.DwgOut() extension method 
+   /// to read the DWG data of a DBObject:
    /// 
-   ///    DBObject someDBObject = .....
-   ///    TypedValue[] data = someDBObject.ToArray();
+   ///    DBObject someDBObject = (assign to a DBObject)
+   ///    TypedValue[] data = someDBObject.DwgOut();
    /// 
-   /// Note that while DwgDataFiler implements both read and
+   /// Note that while DwgDataList implements both read and
    /// write operations, read operations (e.g., DwgIn) have
    /// never been needed or used, are untested, and probably
    /// will not have the desired result.
@@ -28,7 +33,7 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
 
    public static class DwgDataListExtensions
    {
-      public static TypedValue[] ToArray(this DBObject obj)
+      public static TypedValue[] DwgOut(this DBObject obj)
       {
          if(obj == null)
             throw new ArgumentNullException(nameof(obj));
@@ -40,12 +45,12 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
       }
 
       /// <summary>
-      /// Example: Dumps the result of ToArray() to the console:
+      /// Example: Dumps the result of DwgOut() to the console:
       /// </summary>
 
       public static void DwgDump(this DBObject obj)
       {
-         var data = obj.ToArray();
+         var data = obj.DwgOut();
          Editor ed = Application.DocumentManager.MdiActiveDocument.Editor;
          int i = 0;
          foreach(TypedValue tv in data)
@@ -58,7 +63,7 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
 
    public class DwgDataList : DwgFiler, IList<DwgDataItem>
    {
-      ErrorStatus status = ErrorStatus.OK;
+      AcRx.ErrorStatus status = AcRx.ErrorStatus.OK;
       FilerType filerType = FilerType.CopyFiler;
       List<DwgDataItem> data = new List<DwgDataItem>();
       int position = 0;
@@ -90,7 +95,7 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
          }
       }
 
-      public override ErrorStatus FilerStatus
+      public override AcRx.ErrorStatus FilerStatus
       {
          get
          {
@@ -106,7 +111,7 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
       {
          get
          {
-            return FilerType.CopyFiler;
+            return this.filerType;
          }
       }
 
@@ -151,7 +156,7 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
 
          set
          {
-            SetValueAt(index, value);
+            SetValueAt(CheckIndex(index), value);
          }
       }
 
@@ -174,6 +179,8 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
       {
          if(IsEndOfData)
             throw new AcRx.Exception(AcRx.ErrorStatus.EndOfObject);
+         if(FilerStatus != AcRx.ErrorStatus.OK)
+            throw new AcRx.Exception(FilerStatus);
          object value = data[position].Value;
          if(value is T)
          {
@@ -291,7 +298,7 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
 
       public override void ResetFilerStatus()
       {
-         status = ErrorStatus.OK;
+         status = AcRx.ErrorStatus.OK;
       }
 
       public override void Seek(long offset, int method)
@@ -300,10 +307,9 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
       }
 
       /// <summary>
-      /// Write overrides, used by this class to generate
+      /// Write overrides used by this class to generate
       /// a list of data items.
       /// </summary>
-      /// <param name="value"></param>
       
       public override void WriteAddress(IntPtr value)
       {
@@ -452,11 +458,12 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
       /// <summary>
       /// The distinct set of DwgDataTypes contained in the instance.
       /// </summary>
+
       public IEnumerable<DwgDataType> Types
       {
          get
          {
-            return data.Select(d => d.DataType).Distinct();
+            return new HashSet<DwgDataType>(data.Select(item => item.DataType).Distinct());
          }
       }
 
@@ -525,39 +532,46 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
          return -1;
       }
 
-      public void Insert(int index, DwgDataItem item)
+      static void ReadOnlyException()
       {
          throw new NotSupportedException("The instance is read-only");
+      }
+
+      public void Insert(int index, DwgDataItem item)
+      {
+         ReadOnlyException();
       }
 
       public void RemoveAt(int index)
       {
-         throw new NotSupportedException("The instance is read-only");
+         ReadOnlyException();
       }
 
       public void SetValueAt(int index, object value)
       {
-         throw new NotSupportedException("The instance is read-only");
+         ReadOnlyException();
       }
 
       void Add(DwgDataType type, object value)
       {
+         if(FilerStatus != AcRx.ErrorStatus.OK)
+            throw new AcRx.Exception(FilerStatus);
          data.Add(new DwgDataItem(type, value));
       }
 
       public void Add(TypedValue value)
       {
-         throw new NotSupportedException("The instance is read-only");
+         ReadOnlyException();
       }
 
       public virtual void Add(DwgDataItem item)
       {
-         throw new NotSupportedException("The instance is read-only");
+         ReadOnlyException();
       }
 
       public void Clear()
       {
-         throw new NotSupportedException("The instance is read-only");
+         ReadOnlyException();
       }
 
       public bool Contains(DwgDataItem item)
@@ -680,11 +694,13 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
                return new TypedValue((short)DxfCode.XCoordinate, Value);
             case DwgDataType.Vector3d:
                return new TypedValue((short)DxfCode.NormalX);
-
-            //case DwgDataType.Scale3d:
-            //case DwgDataType.BChunk:
-            //case DwgDataType.ByteArray:
-            //case DwgDataType.Ptr:
+            case DwgDataType.ByteArray:
+            case DwgDataType.BChunk:
+               return new TypedValue((short)DxfCode.BinaryChunk, Value);
+            case DwgDataType.Scale3d:
+               return new TypedValue((short)41, Value);
+            case DwgDataType.Ptr:
+               return new TypedValue((short)500, Value);
             default:
                throw new NotSupportedException($"Unsupported DwgDatType: {DataType}");
 
