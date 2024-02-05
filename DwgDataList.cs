@@ -540,9 +540,9 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
          throw new NotSupportedException("The instance is read-only");
       }
 
-      public void Add(DwgDataType type, object value)
+      void Add(DwgDataType type, object value)
       {
-         throw new NotSupportedException("The instance is read-only");
+         data.Add(new DwgDataItem(type, value));
       }
 
       public void Add(TypedValue value)
