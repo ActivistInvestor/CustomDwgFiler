@@ -793,6 +793,8 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
                return new TypedValue((short)DxfCode.TxtStyleXScale, item.Value);
             case DwgDataType.Ptr:
                return new TypedValue((short)500, item.Value);
+            case DwgDataType.Real:
+               return new TypedValue((short) DxfCode.Real, item.Value);
             default:
                throw new NotSupportedException($"Unsupported DwgDatType: {item.DataType}");
 
