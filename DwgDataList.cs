@@ -612,10 +612,12 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
          return this.GetEnumerator();
       }
 
-      public static DwgDataList DwgOut(DBObject obj, FilerType filerType = FilerType.CopyFiler)
+      public static DwgDataList DwgOut(DBObject dbObject, FilerType filerType = FilerType.CopyFiler)
       {
-         DwgDataList list = new DwgDataList();
-         obj.DwgOut(list);
+         if(dbObject == null)
+            throw new ArgumentNullException(nameof(dbObject));
+         DwgDataList list = new DwgDataList(filerType);
+         dbObject.DwgOut(list);
          return list;
       }
    }
@@ -832,7 +834,7 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
       public override string ToString()
       {
          object val = this.Value != null ? this.Value.ToString() : "(null)";
-         return string.Format("\n{1}: {2}", this.DataType, val);
+         return string.Format("\n{0}: {1}", this.DataType, val);
       }
    }
 
