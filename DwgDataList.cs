@@ -56,6 +56,26 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
       List<DwgDataItem> data = new List<DwgDataItem>();
       int position = 0;
 
+      /// <summary>
+      /// Primary entry point. 
+      /// 
+      /// This method must be used to obtain the DWG data
+      /// for a DBObject. 
+      /// 
+      /// The code has not been tested with FilerTypes other
+      /// than FilerType.CopyFiler, and probably should not
+      /// be specified (the default is FilerType.CopyFiler).
+      /// </summary>
+
+      public static DwgDataList DwgOut(DBObject dbObject, FilerType filerType = FilerType.CopyFiler)
+      {
+         if(dbObject == null)
+            throw new ArgumentNullException(nameof(dbObject));
+         DwgDataList list = new DwgDataList(filerType);
+         dbObject.DwgOut(list);
+         return list;
+      }
+
       DwgDataList(FilerType filerType = FilerType.CopyFiler)
       {
          this.filerType = filerType;
@@ -455,6 +475,15 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
       }
 
       /// <summary>
+      /// Returns a subset of elements having the specified DwgDataType
+      /// </summary>
+
+      public IEnumerable<DwgDataItem> OfDataType(DwgDataType dataType)
+      {
+         return data.Where(item => item.DataType == dataType);
+      }
+
+      /// <summary>
       /// The distinct set of DwgDataTypes contained in the instance.
       /// </summary>
 
@@ -504,27 +533,6 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
          return IndexOf(d => object.Equals(d.Value, value));
       }
 
-      /// <summary>
-      /// IList<DwgDataItem> methods that modify the contents 
-      /// of the instance (namely delete) should never be used
-      /// during a call to a method that triggers the use of
-      /// the filer methods above. Altering the contents of
-      /// the instance affects the Position property, which
-      /// may be corrupt if one or more elements are removed
-      /// from the instance.
-      /// 
-      /// Revised: Disregard the above, this class has been 
-      /// made read-only. To modify the contents, you can
-      /// call ToList() and modify the result.
-      /// 
-      /// Methods that trigger calls to the filer methods
-      /// include DBObject.DwgIn() and DwgOut(), along with 
-      /// the DwgInFields() and DwgOutFields() methods of
-      /// non-DBObjects that were designed to be persisted 
-      /// within the data of a DBObject (e.g., 'aggregates').
-      /// </summary>
-      /// <returns></returns>
-
       public int IndexOf(DwgDataItem item)
       {
          return data.IndexOf(item);
@@ -567,14 +575,6 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
          return this.GetEnumerator();
       }
 
-      public static DwgDataList DwgOut(DBObject dbObject, FilerType filerType = FilerType.CopyFiler)
-      {
-         if(dbObject == null)
-            throw new ArgumentNullException(nameof(dbObject));
-         DwgDataList list = new DwgDataList(filerType);
-         dbObject.DwgOut(list);
-         return list;
-      }
    }
 
    public struct DwgDataItem : IEquatable<DwgDataItem>
