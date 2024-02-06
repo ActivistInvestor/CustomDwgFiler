@@ -22,12 +22,12 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
    /// to read the DWG data of a DBObject:
    /// 
    ///    DBObject someDBObject = (assign to a DBObject)
-   /////    IList<DwgDataItem> data = someDBObject.DwgOut();
+   ///    IList<DwgDataItem> data = someDBObject.DwgOut();
    /// 
    /// Note that while DwgDataList implements both read and
    /// write operations, read operations (e.g., DwgIn) have
    /// never been needed or used, are untested, and probably
-   /// will not have the desired result.
+   /// will not work as implemented.
    /// 
    /// Revisions:
    /// 
@@ -35,53 +35,19 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
    ///    its contents, use the Data property to get a copy
    ///    and modify the copy.
    ///    
-   /// 2. Use of TypedValue to represent elements is flawed
+   /// 2. Use of TypedValue to represent elements is flawed,
    ///    because the translation from DwgDataType to DxfCode
    ///    is incoherent and not straight-forword (e.g., how
-   ///    the translation is done depends on the object type).
+   ///    the translation is done depends on the object type
+   ///    and what the data represents).
    ///    
    /// 3. DwgDataList is not reusable on multiple objects. 
-   ///    The constructor was made non-public and creating 
+   ///    The constructor was made non-public, and creating 
    ///    an instance must be done via a call to the static
    ///    DwgOut() method.
    ///    
    /// </summary>
 
-   public static class DwgDataListExtensions
-   {
-      /// <summary>
-      /// Extension method targeting DBObject that returns a
-      /// List<DwgDataItem> containing the data which the given 
-      /// DBObject persists in a DWG file.
-      /// </summary>
-      /// <param name="obj">The DBObject whose data is to be obtained</param>
-      /// <returns>A list of DwgDataItem objects, each describing
-      /// an element of data that is filed out to a .DWG file</returns>
-
-      public static IList<DwgDataItem> DwgOut(this DBObject obj)
-      {
-         if(obj == null)
-            throw new ArgumentNullException(nameof(obj));
-         using(var list = DwgDataList.DwgOut(obj))
-            return list.Data;
-      }
-
-      /// <summary>
-      /// Example: An extension method targeting DBObject,
-      /// that dumps the result of DwgOut() to the console:
-      /// </summary>
-
-      public static void DwgDump(this DBObject obj)
-      {
-         var data = obj.DwgOut();
-         Editor ed = Application.DocumentManager.MdiActiveDocument.Editor;
-         int i = 0;
-         foreach(DwgDataItem item in data)
-         {
-            ed.WriteMessage("\n[{0}] {1}", i++, item.ToString());
-         }
-      }
-   }
 
    public class DwgDataList : DwgFiler, IReadOnlyCollection<DwgDataItem>
    {
@@ -329,11 +295,6 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
          throw new NotSupportedException();  // TODO
       }
 
-      /// <summary>
-      /// Write overrides used by this class to generate
-      /// a list of data items.
-      /// </summary>
-      
       public override void WriteAddress(IntPtr value)
       {
          Add(DwgDataType.Ptr, value);
@@ -465,7 +426,7 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
       /// to DxfCode is not straight-forward and is flawed.
       /// 
       /// It is recommended to use the Data property or the
-      /// IEnumerator<DwgDataItem>, which returns a list of 
+      /// IEnumerator<DwgDataItem>, which return a list of 
       /// DwgDataItem that more-correctly describes what each 
       /// data item represents.
       /// </summary>
@@ -560,9 +521,8 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
       /// include DBObject.DwgIn() and DwgOut(), along with 
       /// the DwgInFields() and DwgOutFields() methods of
       /// non-DBObjects that were designed to be persisted 
-      /// in the data of a DBObject (e.g., 'aggregates').
+      /// within the data of a DBObject (e.g., 'aggregates').
       /// </summary>
-      /// <param name="item"></param>
       /// <returns></returns>
 
       public int IndexOf(DwgDataItem item)
@@ -597,11 +557,6 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
          data.CopyTo(array, arrayIndex);
       }
 
-      public bool Remove(DwgDataItem item)
-      {
-         throw new NotSupportedException("The instance is read-only");
-      }
-
       public IEnumerator<DwgDataItem> GetEnumerator()
       {
          return data.GetEnumerator();
@@ -619,6 +574,58 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
          DwgDataList list = new DwgDataList(filerType);
          dbObject.DwgOut(list);
          return list;
+      }
+   }
+
+   public struct DwgDataItem : IEquatable<DwgDataItem>
+   {
+      public DwgDataItem(DwgDataType type, object value)
+      {
+         if(value == null)
+            throw new ArgumentNullException("value");
+         this.DataType = type;
+         this.Value = value;
+      }
+
+      public DwgDataItem(TypedValue value)
+         : this(((DxfCode)value.TypeCode).ToDwgDataType(), value.Value)
+      {
+      }
+
+      public DwgDataType DataType
+      {
+         get;
+         private set;
+      }
+
+      public object Value
+      {
+         get; private set;
+      }
+
+
+      public bool Equals(DwgDataItem other)
+      {
+         return this.DataType == other.DataType && object.Equals(this.Value, other.Value);
+      }
+
+      public override bool Equals(object obj)
+      {
+         if(obj is DwgDataItem)
+            return Equals((DwgDataItem)obj);
+         else
+            return false;
+      }
+
+      public override int GetHashCode()
+      {
+         return HashCode.Combine(this.DataType.GetHashCode(), this.Value.GetHashCode());
+      }
+
+      public override string ToString()
+      {
+         object val = this.Value != null ? this.Value.ToString() : "(null)";
+         return string.Format("\n{0}: {1}", this.DataType, val);
       }
    }
 
@@ -678,109 +685,42 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
       UInt64 = 31
    };
 
-   public struct DwgDataItem : IEquatable<DwgDataItem>
+   public static class DwgDataListExtensions
    {
-      public DwgDataItem(DwgDataType type, object value)
+      /// <summary>
+      /// Extension method targeting DBObject that returns a
+      /// List<DwgDataItem> containing the data which the given 
+      /// DBObject persists in a DWG file.
+      /// </summary>
+      /// <param name="obj">The DBObject whose data is to be obtained</param>
+      /// <returns>A list of DwgDataItem objects, each describing
+      /// an element of data that is filed out to a .DWG file</returns>
+
+      public static IList<DwgDataItem> DwgOut(this DBObject obj)
       {
-         if(value == null)
-            throw new ArgumentNullException("value");
-         this.DataType = type;
-         this.Value = value;
+         if(obj == null)
+            throw new ArgumentNullException(nameof(obj));
+         using(var list = DwgDataList.DwgOut(obj))
+            return list.Data;
       }
 
-      public DwgDataItem(TypedValue value)
-         : this(DxfCodeToDwgDataType((DxfCode)value.TypeCode), value.Value)
-      {
-      }
+      /// <summary>
+      /// Example: An extension method targeting DBObject,
+      /// that dumps the result of DwgOut() to the console:
+      /// </summary>
 
-      public DwgDataType DataType
+      public static void DwgDump(this DBObject obj)
       {
-         get;
-         private set;
-      }
-
-      public object Value
-      {
-         get; private set;
-      }
-
-      public TypedValue ToTypedValue()
-      {
-         switch(this.DataType)
+         var data = obj.DwgOut();
+         Editor ed = Application.DocumentManager.MdiActiveDocument.Editor;
+         int i = 0;
+         foreach(DwgDataItem item in data)
          {
-            case DwgDataType.Bool:
-               return new TypedValue((short)DxfCode.Bool, (short)Value);
-            case DwgDataType.Byte:
-            case DwgDataType.Int8:
-               return new TypedValue((short)DxfCode.Int8, Value);
-            case DwgDataType.Int16:
-               return new TypedValue((short)DxfCode.Int16, Value);
-            case DwgDataType.Int32:
-               return new TypedValue((short)DxfCode.Int32, Value);
-            case DwgDataType.Int64:
-               return new TypedValue((short)DxfCode.Int64, Value);
-            case DwgDataType.Text:
-               return new TypedValue((short)DxfCode.Text, Value);
-            case DwgDataType.Handle:
-               return new TypedValue((short)DxfCode.Handle, Value.ToString());
-            case DwgDataType.HardOwnershipId:
-               return new TypedValue((short)DxfCode.HardOwnershipId, Value);
-            case DwgDataType.SoftOwnershipId:
-               return new TypedValue((short)DxfCode.SoftOwnershipId, Value);
-            case DwgDataType.HardPointerId:
-               return new TypedValue((short)DxfCode.SoftPointerId, Value);
-            case DwgDataType.SoftPointerId:
-               return new TypedValue((short)DxfCode.SoftPointerId, Value);
-            case DwgDataType.Point3d:
-            case DwgDataType.Point2d:  // returns as Point3d
-            case DwgDataType.Real3:
-               return new TypedValue((short)DxfCode.XCoordinate, Value);
-            case DwgDataType.Vector3d:
-               return new TypedValue((short)DxfCode.NormalX);
-            case DwgDataType.ByteArray:
-            case DwgDataType.BChunk:
-               return new TypedValue((short)DxfCode.BinaryChunk, Value);
-            case DwgDataType.Scale3d:
-               return new TypedValue((short)DxfCode.TxtStyleXScale, Value);
-            case DwgDataType.Ptr:
-               return new TypedValue((short)500, Value);
-            default:
-               throw new NotSupportedException($"Unsupported DwgDatType: {DataType}");
-
+            ed.WriteMessage("\n[{0}] {1}", i++, item.ToString());
          }
       }
 
-      static Dictionary<DwgDataType, Type> typeMap = new Dictionary<DwgDataType, System.Type>();
-
-      static DwgDataItem()
-      {
-         typeMap[DwgDataType.Text] = typeof(string);
-         typeMap[DwgDataType.Bool] = typeof(bool);
-         typeMap[DwgDataType.Int8] = typeof(char);
-         typeMap[DwgDataType.Int16] = typeof(short);
-         typeMap[DwgDataType.Int32] = typeof(int);
-         typeMap[DwgDataType.Int64] = typeof(long);
-         typeMap[DwgDataType.Real3] = typeof(Point3d);
-         typeMap[DwgDataType.Byte] = typeof(byte);
-         typeMap[DwgDataType.Handle] = typeof(Handle); // string in dxf
-         typeMap[DwgDataType.HardOwnershipId] = typeof(ObjectId);
-         typeMap[DwgDataType.SoftOwnershipId] = typeof(ObjectId);
-         typeMap[DwgDataType.HardPointerId] = typeof(ObjectId);
-         typeMap[DwgDataType.SoftPointerId] = typeof(ObjectId);
-         typeMap[DwgDataType.UInt32] = typeof(UInt32);
-         typeMap[DwgDataType.UInt16] = typeof(UInt16);
-         typeMap[DwgDataType.UInt64] = typeof(UInt64);
-         typeMap[DwgDataType.Vector2d] = typeof(Vector2d);
-         typeMap[DwgDataType.Vector3d] = typeof(Vector3d);
-         typeMap[DwgDataType.Scale3d] = typeof(Scale3d);
-         typeMap[DwgDataType.Real] = typeof(double);
-         typeMap[DwgDataType.Point3d] = typeof(Point3d);
-         typeMap[DwgDataType.Point2d] = typeof(Point2d);
-         typeMap[DwgDataType.BChunk] = typeof(byte[]);
-         typeMap[DwgDataType.Byte] = typeof(byte);
-      }
-
-      static DwgDataType DxfCodeToDwgDataType(DxfCode dxfCode)
+      public static DwgDataType ToDwgDataType(this DxfCode dxfCode)
       {
          switch(dxfCode)
          {
@@ -813,29 +753,94 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
          }
       }
 
-      public bool Equals(DwgDataItem other)
+      public static TypedValue ToTypedValue(this DwgDataItem item)
       {
-         return this.DataType == other.DataType && object.Equals(this.Value, other.Value);
+         switch(item.DataType)
+         {
+            case DwgDataType.Bool:
+               return new TypedValue((short)DxfCode.Bool, (short)item.Value);
+            case DwgDataType.Byte:
+            case DwgDataType.Int8:
+               return new TypedValue((short)DxfCode.Int8, item.Value);
+            case DwgDataType.Int16:
+               return new TypedValue((short)DxfCode.Int16, item.Value);
+            case DwgDataType.Int32:
+               return new TypedValue((short)DxfCode.Int32, item.Value);
+            case DwgDataType.Int64:
+               return new TypedValue((short)DxfCode.Int64, item.Value);
+            case DwgDataType.Text:
+               return new TypedValue((short)DxfCode.Text, item.Value);
+            case DwgDataType.Handle:
+               return new TypedValue((short)DxfCode.Handle, item.Value.ToString());
+            case DwgDataType.HardOwnershipId:
+               return new TypedValue((short)DxfCode.HardOwnershipId, item.Value);
+            case DwgDataType.SoftOwnershipId:
+               return new TypedValue((short)DxfCode.SoftOwnershipId, item.Value);
+            case DwgDataType.HardPointerId:
+               return new TypedValue((short)DxfCode.SoftPointerId, item.Value);
+            case DwgDataType.SoftPointerId:
+               return new TypedValue((short)DxfCode.SoftPointerId, item.Value);
+            case DwgDataType.Point3d:
+            case DwgDataType.Point2d:  // returns as Point3d
+            case DwgDataType.Real3:
+               return new TypedValue((short)DxfCode.XCoordinate, item.Value);
+            case DwgDataType.Vector3d:
+               return new TypedValue((short)DxfCode.NormalX, item.Value);
+            case DwgDataType.ByteArray:
+            case DwgDataType.BChunk:
+               return new TypedValue((short)DxfCode.BinaryChunk, item.Value);
+            case DwgDataType.Scale3d:
+               return new TypedValue((short)DxfCode.TxtStyleXScale, item.Value);
+            case DwgDataType.Ptr:
+               return new TypedValue((short)500, item.Value);
+            default:
+               throw new NotSupportedException($"Unsupported DwgDatType: {item.DataType}");
+
+         }
       }
 
-      public override bool Equals(object obj)
+      /// <summary>
+      /// Returns the managed Type that represents a value
+      /// corresponding to the given DwgDataType.
+      /// </summary>
+
+      public static Type GetCLRType(this DwgDataType dataType)
       {
-         if(obj is DwgDataItem)
-            return Equals((DwgDataItem)obj);
-         else
-            return false;
+         return typeMap[dataType];
       }
 
-      public override int GetHashCode()
+      static Dictionary<DwgDataType, Type> typeMap = new Dictionary<DwgDataType, System.Type>();
+
+      static DwgDataListExtensions()
       {
-         return HashCode.Combine(this.DataType.GetHashCode(), this.Value.GetHashCode());
+         typeMap[DwgDataType.Text] = typeof(string);
+         typeMap[DwgDataType.Bool] = typeof(bool);
+         typeMap[DwgDataType.Int8] = typeof(char);
+         typeMap[DwgDataType.Int16] = typeof(short);
+         typeMap[DwgDataType.Int32] = typeof(int);
+         typeMap[DwgDataType.Int64] = typeof(long);
+         typeMap[DwgDataType.Real3] = typeof(Point3d);
+         typeMap[DwgDataType.Byte] = typeof(byte);
+         typeMap[DwgDataType.Handle] = typeof(Handle); // string in dxf
+         typeMap[DwgDataType.HardOwnershipId] = typeof(ObjectId);
+         typeMap[DwgDataType.SoftOwnershipId] = typeof(ObjectId);
+         typeMap[DwgDataType.HardPointerId] = typeof(ObjectId);
+         typeMap[DwgDataType.SoftPointerId] = typeof(ObjectId);
+         typeMap[DwgDataType.UInt32] = typeof(UInt32);
+         typeMap[DwgDataType.UInt16] = typeof(UInt16);
+         typeMap[DwgDataType.UInt64] = typeof(UInt64);
+         typeMap[DwgDataType.Vector2d] = typeof(Vector2d);
+         typeMap[DwgDataType.Vector3d] = typeof(Vector3d);
+         typeMap[DwgDataType.Scale3d] = typeof(Scale3d);
+         typeMap[DwgDataType.Real] = typeof(double);
+         typeMap[DwgDataType.Point3d] = typeof(Point3d);
+         typeMap[DwgDataType.Point2d] = typeof(Point2d);
+         typeMap[DwgDataType.BChunk] = typeof(byte[]);
+         typeMap[DwgDataType.Byte] = typeof(byte);
       }
 
-      public override string ToString()
-      {
-         object val = this.Value != null ? this.Value.ToString() : "(null)";
-         return string.Format("\n{0}: {1}", this.DataType, val);
-      }
+
    }
+
 
 }
