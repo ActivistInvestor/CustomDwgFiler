@@ -16,15 +16,21 @@ using Autodesk.AutoCAD.GraphicsSystem;
 namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
 {
    /// <summary>
-   /// Custom DwgFiler class that can be used to read the
-   /// data that a DBObject writes to a DWG file into a 
-   /// ResultBufder or array of TypedValues.
+   /// A custom DwgFiler that collects the data that a 
+   /// DBObject writes to a DWG file into a List.
    /// 
    /// Use the included DBObject.DwgOut() extension method 
    /// to read the DWG data of a DBObject:
    /// 
-   ///    DBObject someDBObject = (assign to a DBObject)
+   ///    DBObject someDBObject = (assign to an open DBObject)
    ///    IList<DwgDataItem> data = someDBObject.DwgOut();
+   ///    
+   /// The resulting list will contain all data that is
+   /// returned by the acdbEntGet() function, and possible
+   /// additional data as well, and hence, can be used in
+   /// lieu of P/Invoking acdbEntGet(). Since DWG files are
+   /// not documented, interpretation of the resulting data
+   /// is up to the user of this class.
    /// 
    /// Note that while DwgDataList implements both read and
    /// write operations, read operations (e.g., DwgIn) have
@@ -47,6 +53,12 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
    ///    The constructor was made non-public, and creating 
    ///    an instance must be done via a call to the static
    ///    DwgOut() method.
+   ///    
+   /// 4. The IncludeBinaryData property can be used to avoid 
+   ///    collecting binary data in cases where the caller is 
+   ///    not interested in, or doesn't require it (XData is
+   ///    rendered as binary data). If set to false, no binary
+   ///    data is collected or included in the result.
    ///    
    /// </summary>
 
@@ -104,6 +116,14 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
             return data.ToList();
          }
       }
+
+      /// <summary>
+      /// If set to true (the default), binary data is
+      /// collected. If set to false, binary data is not 
+      /// collected.
+      /// </summary>
+
+      public bool IncludeBinaryData { get; set; } = true;
 
       public override AcRx.ErrorStatus FilerStatus
       {
@@ -165,10 +185,11 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
          }
       }
 
-      T TypeMismatch<T>(int index, Type type)
+      static T TypeMismatch<T>(int index, Type type)
       {
          string name = type?.Name ?? "(null)";
-         throw new InvalidCastException($"Type mismatch at {index}: Found {name}, expecting {typeof(T).Name})");
+         throw new InvalidCastException(
+            $"Type mismatch at {index}: Found {name}, expecting {typeof(T).Name})");
       }
 
       public override IntPtr ReadAddress()
@@ -324,7 +345,8 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
 
       public override void WriteBinaryChunk(byte[] chunk)
       {
-         WriteBytes(chunk, DwgDataType.BChunk);
+         if(IncludeBinaryData)
+            WriteBytes(chunk, DwgDataType.BChunk);
       }
 
       public override void WriteBoolean(bool value)
@@ -339,7 +361,8 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
 
       public override void WriteBytes(byte[] chunk)
       {
-         WriteBytes(chunk, DwgDataType.ByteArray);
+         if(IncludeBinaryData)
+            WriteBytes(chunk, DwgDataType.ByteArray);
       }
 
       void WriteBytes(byte[] chunk, DwgDataType dataType)
@@ -441,33 +464,6 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
          this.Add(DwgDataType.Vector3d, value);
       }
 
-      TypedValue[] typedValues = null;
-      
-      /// <summary>
-      /// Not recommended. The conversion from DwgDataType
-      /// to DxfCode is not straight-forward and is flawed.
-      /// 
-      /// It is recommended to use the Data property or the
-      /// IEnumerator<DwgDataItem>, which return a list of 
-      /// DwgDataItem that more-correctly describes what each 
-      /// data item represents.
-      /// </summary>
-
-      public TypedValue[] TypedValues
-      {
-         get
-         {
-            if(typedValues == null)
-            {
-               TypedValue[] values = new TypedValue[this.Count];
-               for(int i = 0; i < this.Count; i++)
-                  values[i] = this[i].ToTypedValue();
-               typedValues = values;
-            }
-            return typedValues;
-         }
-      }
-
       public List<object> Values
       {
          get
@@ -480,7 +476,7 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
       /// Returns a subset of elements having the specified DwgDataType
       /// </summary>
 
-      public IEnumerable<DwgDataItem> OfDataType(DwgDataType dataType)
+      public IEnumerable<DwgDataItem> OfType(DwgDataType dataType)
       {
          return data.Where(item => item.DataType == dataType);
       }
@@ -489,21 +485,17 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
       /// The distinct set of DwgDataTypes contained in the instance.
       /// </summary>
 
-      HashSet<DwgDataType> includedTypes = null;
-
-      public IEnumerable<DwgDataType> IncludedTypes
+      public ICollection<DwgDataType> IncludedTypes
       {
          get
          {
             if(Count == 0)
                return new HashSet<DwgDataType>();
-            if(includedTypes == null)
-               includedTypes = new HashSet<DwgDataType>(data.Select(item => item.DataType).Distinct());
-            return includedTypes;
+            return new HashSet<DwgDataType>(data.Select(item => item.DataType).Distinct());
          }
       }
 
-      int CheckIndex(int index)
+      protected int CheckIndex(int index)
       {
          if(index < 0 || index > data.Count - 1)
             throw new IndexOutOfRangeException($"index = {index} count = {data.Count}");
@@ -550,7 +542,16 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
          return -1;
       }
 
-      void Add(DwgDataType type, object value)
+      /// <summary>
+      /// Derived types can override this to selectively
+      /// collect only the data or data types they are
+      /// interested in.
+      /// </summary>
+      /// <param name="type"></param>
+      /// <param name="value"></param>
+      /// <exception cref="AcRx.Exception"></exception>
+
+      protected virtual void Add(DwgDataType type, object value)
       {
          if(FilerStatus != AcRx.ErrorStatus.OK)
             throw new AcRx.Exception(FilerStatus);
@@ -576,7 +577,6 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
       {
          return this.GetEnumerator();
       }
-
    }
 
    public struct DwgDataItem : IEquatable<DwgDataItem>
@@ -589,11 +589,6 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
          this.Value = value;
       }
 
-      public DwgDataItem(TypedValue value)
-         : this(((DxfCode)value.TypeCode).ToDwgDataType(), value.Value)
-      {
-      }
-
       public DwgDataType DataType
       {
          get;
@@ -604,7 +599,6 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
       {
          get; private set;
       }
-
 
       public bool Equals(DwgDataItem other)
       {
@@ -628,7 +622,6 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
       {
          return string.Format("\n{0}: {1}", this.DataType, Value.SafeToString());
       }
-
    }
 
    /* Native definition
@@ -722,40 +715,7 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
          }
       }
 
-      public static DwgDataType ToDwgDataType(this DxfCode dxfCode)
-      {
-         switch(dxfCode)
-         {
-            case DxfCode.Text:
-               return DwgDataType.Text;
-            case DxfCode.Bool:
-               return DwgDataType.Bool;
-            case DxfCode.Int16:
-               return DwgDataType.Int16;
-            case DxfCode.Int32:
-               return DwgDataType.Int32;
-            case DxfCode.Int64:
-               return DwgDataType.Int64;
-            case DxfCode.Int8:
-               return DwgDataType.Int8;
-            case DxfCode.Handle:
-               return DwgDataType.Handle;
-            case DxfCode.HardOwnershipId:
-               return DwgDataType.HardOwnershipId;
-            case DxfCode.SoftOwnershipId:
-               return DwgDataType.SoftOwnershipId;
-            case DxfCode.SoftPointerId:
-               return DwgDataType.HardPointerId;
-            case DxfCode.XCoordinate:
-               return DwgDataType.Real3;
-            case DxfCode.NormalX:
-               return DwgDataType.Vector3d;
-            default:
-               throw new NotSupportedException($"Unsupported DxfCode: {dxfCode}");
-         }
-      }
-
-      public static Type ToManagedType(this DwgDataType dataType, bool nullcheck = false)
+      public static Type GetRuntimeType(this DwgDataType dataType, bool nullcheck = false)
       {
          if(typeMap.ContainsKey(dataType))
             return typeMap[dataType];
@@ -767,13 +727,11 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
       /// <summary>
       /// May fail on some UInt types
       /// </summary>
-      /// <param name="item"></param>
-      /// <param name="index"></param>
-      /// <exception cref="InvalidOperationException"></exception>
+
       public static void CheckType(this DwgDataItem item, int index = -1)
       {
          string idx = index > -1 ? $"[{index}] " : "";
-         Type type = item.DataType.ToManagedType(true);
+         Type type = item.DataType.GetRuntimeType(true);
          Type valueType = item.Value?.GetType();
          if(valueType == null)
             throw new InvalidOperationException($"{idx}Value is null");
@@ -782,53 +740,6 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
                $"{idx}Type mismatch DwgDataType: {type.Name} Value: {valueType.Name}");
       }
 
-      public static TypedValue ToTypedValue(this DwgDataItem item)
-      {
-         switch(item.DataType)
-         {
-            case DwgDataType.Bool:
-               return new TypedValue((short)DxfCode.Bool, (short)item.Value);
-            case DwgDataType.Byte:
-            case DwgDataType.Int8:
-               return new TypedValue((short)DxfCode.Int8, item.Value);
-            case DwgDataType.Int16:
-               return new TypedValue((short)DxfCode.Int16, item.Value);
-            case DwgDataType.Int32:
-               return new TypedValue((short)DxfCode.Int32, item.Value);
-            case DwgDataType.Int64:
-               return new TypedValue((short)DxfCode.Int64, item.Value);
-            case DwgDataType.Text:
-               return new TypedValue((short)DxfCode.Text, item.Value);
-            case DwgDataType.Handle:
-               return new TypedValue((short)DxfCode.Handle, item.Value.ToString());
-            case DwgDataType.HardOwnershipId:
-               return new TypedValue((short)DxfCode.HardOwnershipId, item.Value);
-            case DwgDataType.SoftOwnershipId:
-               return new TypedValue((short)DxfCode.SoftOwnershipId, item.Value);
-            case DwgDataType.HardPointerId:
-               return new TypedValue((short)DxfCode.SoftPointerId, item.Value);
-            case DwgDataType.SoftPointerId:
-               return new TypedValue((short)DxfCode.SoftPointerId, item.Value);
-            case DwgDataType.Point3d:
-            case DwgDataType.Point2d:  // returns as Point3d
-            case DwgDataType.Real3:
-               return new TypedValue((short)DxfCode.XCoordinate, item.Value);
-            case DwgDataType.Vector3d:
-               return new TypedValue((short)DxfCode.NormalX, item.Value);
-            case DwgDataType.ByteArray:
-            case DwgDataType.BChunk:
-               return new TypedValue((short)DxfCode.BinaryChunk, item.Value);
-            case DwgDataType.Scale3d:
-               return new TypedValue((short)DxfCode.TxtStyleXScale, item.Value);
-            case DwgDataType.Ptr:
-               return new TypedValue((short)500, item.Value);
-            case DwgDataType.Real:
-               return new TypedValue((short) DxfCode.Real, item.Value);
-            default:
-               throw new NotSupportedException($"Unsupported DwgDatType: {item.DataType}");
-
-         }
-      }
 
       /// <summary>
       /// Returns the managed Type that represents a value
@@ -872,80 +783,5 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
 
 
    }
-
-   public class Node<T> : IEnumerable<Node<T>>
-   {
-      OrderedSet<Node<T>> nodes = new OrderedSet<Node<T>>();
-
-      private Node<T> parent;
-
-      public Node(T value)
-      {
-         this.Value = value;
-      }
-
-      public Node(Node<T> parent, T value)
-      {
-
-      }
-
-      public void Add(params Node<T>[] nodes)
-      {
-         Add((IEnumerable<Node<T>>)nodes);
-      }
-
-      public void Add(IEnumerable<Node<T>> children)
-      {
-         var ancestors = Parent != null ? new HashSet<Node<T>>(Ancestors) : null;
-         foreach(var node in children)
-         {
-            if(nodes.Contains(node))
-               throw new InvalidOperationException("child already exists");
-            if(ancestors != null && ancestors.Contains(node))
-               throw new InvalidOperationException("Cannot add as ancestor as child");
-            nodes.Add(node);
-            node.parent = this;
-         }
-      }
-
-      IEnumerable<Node<T>> Ancestors
-      { 
-         get 
-         {
-            var parent = this.Parent;
-            while(parent != null)
-            {
-               yield return parent;
-               parent = parent.Parent;
-            }
-         } 
-      }
-
-      public bool IsRoot => this.parent == null;
-
-      public int Count => nodes.Count;
-
-      public Node<T> this[int index] => nodes[index];
-
-      public Node<T> Parent { get { return this.parent; } }
-
-      public T Value { get; set; }
-
-      public IEnumerator<Node<T>> GetEnumerator()
-      {
-         return ((IEnumerable<Node<T>>)nodes).GetEnumerator();
-      }
-
-      IEnumerator IEnumerable.GetEnumerator()
-      {
-         return ((IEnumerable)nodes).GetEnumerator();
-      }
-   }
-
-   public class DwgReferenceNode : GraphNode 
-   {
-      public DwgReferenceNode() { }
-   }
-
 
 }
