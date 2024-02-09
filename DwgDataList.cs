@@ -10,6 +10,8 @@ using System.Collections.Generic;
 using System.Collections;
 using AcRx = Autodesk.AutoCAD.Runtime;
 using Autodesk.AutoCAD.EditorInput;
+using System.Runtime.CompilerServices;
+using Autodesk.AutoCAD.GraphicsSystem;
 
 namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
 {
@@ -86,14 +88,14 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
          position = 0;
       }
 
-      public DwgDataItem? Peek()
-      {
-         if(data.Count > 0 && position < data.Count - 1)
-         {
-            return data[position];
-         }
-         return null;
-      }
+      //public DwgDataItem? Peek()
+      //{
+      //   if(data.Count > 0 && position < data.Count - 1)
+      //   {
+      //      return data[position];
+      //   }
+      //   return null;
+      //}
 
       public IList<DwgDataItem> Data
       {
@@ -624,9 +626,9 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
 
       public override string ToString()
       {
-         object val = this.Value != null ? this.Value.ToString() : "(null)";
-         return string.Format("\n{0}: {1}", this.DataType, val);
+         return string.Format("\n{0}: {1}", this.DataType, Value.SafeToString());
       }
+
    }
 
    /* Native definition
@@ -753,6 +755,33 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
          }
       }
 
+      public static Type ToManagedType(this DwgDataType dataType, bool nullcheck = false)
+      {
+         if(typeMap.ContainsKey(dataType))
+            return typeMap[dataType];
+         else if(nullcheck)
+            throw new KeyNotFoundException($"Type for {dataType} not found.");
+         return null;
+      }
+
+      /// <summary>
+      /// May fail on some UInt types
+      /// </summary>
+      /// <param name="item"></param>
+      /// <param name="index"></param>
+      /// <exception cref="InvalidOperationException"></exception>
+      public static void CheckType(this DwgDataItem item, int index = -1)
+      {
+         string idx = index > -1 ? $"[{index}] " : "";
+         Type type = item.DataType.ToManagedType(true);
+         Type valueType = item.Value?.GetType();
+         if(valueType == null)
+            throw new InvalidOperationException($"{idx}Value is null");
+         if(type != valueType)
+            throw new InvalidOperationException(
+               $"{idx}Type mismatch DwgDataType: {type.Name} Value: {valueType.Name}");
+      }
+
       public static TypedValue ToTypedValue(this DwgDataItem item)
       {
          switch(item.DataType)
@@ -842,6 +871,80 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
       }
 
 
+   }
+
+   public class Node<T> : IEnumerable<Node<T>>
+   {
+      OrderedSet<Node<T>> nodes = new OrderedSet<Node<T>>();
+
+      private Node<T> parent;
+
+      public Node(T value)
+      {
+         this.Value = value;
+      }
+
+      public Node(Node<T> parent, T value)
+      {
+
+      }
+
+      public void Add(params Node<T>[] nodes)
+      {
+         Add((IEnumerable<Node<T>>)nodes);
+      }
+
+      public void Add(IEnumerable<Node<T>> children)
+      {
+         var ancestors = Parent != null ? new HashSet<Node<T>>(Ancestors) : null;
+         foreach(var node in children)
+         {
+            if(nodes.Contains(node))
+               throw new InvalidOperationException("child already exists");
+            if(ancestors != null && ancestors.Contains(node))
+               throw new InvalidOperationException("Cannot add as ancestor as child");
+            nodes.Add(node);
+            node.parent = this;
+         }
+      }
+
+      IEnumerable<Node<T>> Ancestors
+      { 
+         get 
+         {
+            var parent = this.Parent;
+            while(parent != null)
+            {
+               yield return parent;
+               parent = parent.Parent;
+            }
+         } 
+      }
+
+      public bool IsRoot => this.parent == null;
+
+      public int Count => nodes.Count;
+
+      public Node<T> this[int index] => nodes[index];
+
+      public Node<T> Parent { get { return this.parent; } }
+
+      public T Value { get; set; }
+
+      public IEnumerator<Node<T>> GetEnumerator()
+      {
+         return ((IEnumerable<Node<T>>)nodes).GetEnumerator();
+      }
+
+      IEnumerator IEnumerable.GetEnumerator()
+      {
+         return ((IEnumerable)nodes).GetEnumerator();
+      }
+   }
+
+   public class DwgReferenceNode : GraphNode 
+   {
+      public DwgReferenceNode() { }
    }
 
 
