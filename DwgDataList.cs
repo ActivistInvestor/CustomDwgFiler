@@ -47,7 +47,9 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
    ///    because the translation from DwgDataType to DxfCode
    ///    is incoherent and not straight-forword (e.g., how
    ///    the translation is done depends on the object type
-   ///    and what the data represents).
+   ///    and what the data represents). Additionally, there
+   ///    are no DxfCodes representing some data types that
+   ///    can appear in DWG output.
    ///    
    /// 3. DwgDataList is not reusable on multiple objects. 
    ///    The constructor was made non-public, and creating 
@@ -57,8 +59,11 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
    /// 4. The IncludeBinaryData property can be used to avoid 
    ///    collecting binary data in cases where the caller is 
    ///    not interested in, or doesn't require it (XData is
-   ///    rendered as binary data). If set to false, no binary
-   ///    data is collected or included in the result.
+   ///    rendered as binary data, but typically isn't needed
+   ///    in that form, since it is accessable via the DBObject 
+   ///    XData property without requiring interpretation). If 
+   ///    set to false (default is true), no binary data is 
+   ///    collected or included in the instance.
    ///    
    /// </summary>
 
@@ -68,6 +73,7 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
       AcRx.ErrorStatus status = AcRx.ErrorStatus.OK;
       FilerType filerType = FilerType.CopyFiler;
       List<DwgDataItem> data = new List<DwgDataItem>();
+      HashSet<DwgDataType> includedTypes = new HashSet<DwgDataType>();
       int position = 0;
 
       /// <summary>
@@ -485,15 +491,7 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
       /// The distinct set of DwgDataTypes contained in the instance.
       /// </summary>
 
-      public ICollection<DwgDataType> IncludedTypes
-      {
-         get
-         {
-            if(Count == 0)
-               return new HashSet<DwgDataType>();
-            return new HashSet<DwgDataType>(data.Select(item => item.DataType).Distinct());
-         }
-      }
+      public ICollection<DwgDataType> IncludedTypes => includedTypes;
 
       protected int CheckIndex(int index)
       {
@@ -514,7 +512,7 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
 
       public bool ContainsType(DwgDataType type)
       {
-         return IndexOfType(type) > -1;
+         return includedTypes.Contains(type);
       }
 
       public int IndexOfType(DwgDataType type)
@@ -555,6 +553,7 @@ namespace Autodesk.AutoCAD.DatabaseServices.MyExtensions
       {
          if(FilerStatus != AcRx.ErrorStatus.OK)
             throw new AcRx.Exception(FilerStatus);
+         includedTypes.Add(type);
          data.Add(new DwgDataItem(type, value));
       }
 
